@@ -1,4 +1,6 @@
 const express = require('express')
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const app = express()
 require('dotenv').config()
 const cors = require('cors')
@@ -32,6 +34,72 @@ async function run() {
 
     const coursesCollection = client.db("curiokids").collection("courses");
     const teachersCollection = client.db("curiokids").collection("teachers");
+    const usersCollection = client.db("curiokids").collection("users");
+
+
+  // Verify JWT (middleware)
+const verifyJWT = (req, res, next) => {
+  const token = req.headers['authorization'];
+  if (!token) return res.sendStatus(403);
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+      if (err) return res.sendStatus(403);
+      req.userId = decoded.userId;
+      next();
+  });
+};
+
+      //auth
+
+      app.post('/register', async (req, res) => {
+        const { name, email, password } = req.body;
+    
+        // Check if the user already exists
+        const userExists = await usersCollection.findOne({ email });
+        if (userExists) {
+            return res.status(400).json({ message: "User already exists" });
+        }
+    
+        // Hash the password
+        const hashedPassword = await bcrypt.hash(password, 10);
+    
+        // Create a new user
+        const newUser = {
+            name,
+            email,
+            password: hashedPassword,
+        };
+    
+        // Insert the user into the database
+        const result = await usersCollection.insertOne(newUser);
+    
+        res.status(201).json({ message: "User registered successfully" });
+    });
+    
+    // Login User
+    app.post('/login', async (req, res) => {
+        const { email, password } = req.body;
+    
+        // Find the user by email
+        const user = await usersCollection.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ message: "Invalid credentials" });
+        }
+    
+        // Check if the password is correct
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Invalid credentials" });
+        }
+    
+        // Generate JWT
+        const token = jwt.sign({ userId: user._id, }, process.env.JWT_SECRET, {
+            expiresIn: '365d',
+        });
+    
+        res.status(200).json({ token });
+    });
+
     // Courses
     app.get("/courses", async (req, res) => {
         const cursor = coursesCollection.find();
