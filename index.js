@@ -31,7 +31,8 @@ async function run() {
   try {
 
     const coursesCollection = client.db("curiokids").collection("courses");
-    //get all Courses
+    const teachersCollection = client.db("curiokids").collection("teachers");
+    // Courses
     app.get("/courses", async (req, res) => {
         const cursor = coursesCollection.find();
         const courses = await cursor.toArray();
@@ -43,6 +44,20 @@ async function run() {
         const result = await coursesCollection.insertOne(course);
         res.send(result);
       });
+
+    //teachers
+
+    app.get("/teachers", async (req, res) => {
+      const cursor = teachersCollection.find();
+      const teachers = await cursor.toArray();
+      res.send(teachers);
+    });
+
+    app.post('/teachers', async (req, res) => {
+      const teacher = req.body;
+      const result = await teachersCollection.insertOne(teacher);
+      res.send(result);
+    });
    
 
     // Send a ping to confirm a successful connection
