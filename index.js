@@ -10,7 +10,7 @@ const port = process.env.PORT || 8000;
 
 // middleware
 const corsOptions = {
-  origin: ["http://localhost:5173", "http://localhost:5174"],
+  origin: ["http://localhost:3000", "https://curio-kids-eta.vercel.app"],
   credentials: true,
   optionSuccessStatus: 200,
 };
@@ -35,19 +35,22 @@ async function run() {
 
     // Verify JWT (middleware)
     const verifyJWT = (req, res, next) => {
-
       const token = req.headers["authorization"];
 
       if (!token) return res.sendStatus(403);
 
-      jwt.verify(token.split(" ")[1], process.env.JWT_SECRET, (err, decoded) => {
-        if (err) {
-          console.log("JWT verification error:", err);
-          return res.sendStatus(403);
+      jwt.verify(
+        token.split(" ")[1],
+        process.env.JWT_SECRET,
+        (err, decoded) => {
+          if (err) {
+            console.log("JWT verification error:", err);
+            return res.sendStatus(403);
+          }
+          req.userId = decoded.userId;
+          next();
         }
-        req.userId = decoded.userId;
-        next();
-      });
+      );
     };
 
     //auth
@@ -69,6 +72,9 @@ async function run() {
         name,
         email,
         password: hashedPassword,
+        role: "user",
+        profilePicture:
+          "https://i.ibb.co.com/7gtdY9x/pngtree-cartoon-style-female-user-profile-icon-vector-illustraton-png-image-6489286.png",
       };
 
       // Insert the user into the database
@@ -94,7 +100,14 @@ async function run() {
       }
 
       // Generate JWT
-      const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+      const token = jwt.sign({ 
+        userId: user._id,
+        name:user.name,
+        email:user.email,
+        role:user?.role,
+        profilePicture:user.profilePicture
+        
+      }, process.env.JWT_SECRET, {
         expiresIn: "365d",
       });
 
@@ -102,8 +115,19 @@ async function run() {
     });
 
     // Protect your routes using verifyJWT
-    app.get("/protected", verifyJWT, (_, res) => {
-      res.json({ message: "This is a protected route" });
+    app.get("/protected", verifyJWT, async(req, res) => {
+      const user = await usersCollection.findOne({ _id: new ObjectId(req.userId) });
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  res.json({
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role || 'user',  
+    profilePicture: user.profilePicture || null,
+  });
     });
 
     // Courses
