@@ -53,6 +53,53 @@ async function run() {
       );
     };
 
+// Select a course
+app.post("/courses/select", verifyJWT, async (req, res) => {
+  const { courseId } = req.body;
+  
+  // Check if the course exists
+  const course = await coursesCollection.findOne({ _id: new ObjectId(courseId) });
+  if (!course) {
+    return res.status(404).json({ message: "Course not found" });
+  }
+
+  // Add the course to the user's selected courses
+  const result = await usersCollection.updateOne(
+    { _id: new ObjectId(req.userId) },
+    { $addToSet: { selectedCourses: courseId } }
+  );
+
+  res.status(200).json({ message: "Course selected successfully", result });
+});
+
+// Fetch selected courses for the user
+app.get("/courses/selected", verifyJWT, async (req, res) => {
+  const user = await usersCollection.findOne({ _id: new ObjectId(req.userId) });
+  if (!user || !user.selectedCourses) {
+    return res.status(404).json({ message: "No courses selected" });
+  }
+
+  // Fetch selected course details
+  const selectedCourses = await coursesCollection
+    .find({ _id: { $in: user.selectedCourses.map(id => new ObjectId(id)) } })
+    .toArray();
+
+  res.status(200).json(selectedCourses);
+});
+
+// Delete a selected course
+app.delete("/courses/remove", verifyJWT, async (req, res) => {
+  const { courseId } = req.body;
+
+  // Remove the course from the user's selected courses
+  const result = await usersCollection.updateOne(
+    { _id: new ObjectId(req.userId) },
+    { $pull: { selectedCourses: courseId } }
+  );
+
+  res.status(200).json({ message: "Course removed successfully", result });
+});
+
     //auth
 
     app.post("/register", async (req, res) => {
