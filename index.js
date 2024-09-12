@@ -8,13 +8,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const port = process.env.PORT || 8000;
 
-// middleware
-const corsOptions = {
-  origin: ["http://localhost:3000", "https://curio-kids-eta.vercel.app"],
-  credentials: true,
-  optionSuccessStatus: 200,
-};
-app.use(cors(corsOptions));
+app.use(cors());
 
 app.use(express.json());
 
@@ -53,14 +47,41 @@ async function run() {
       );
     };
 
+    // Role-based authorization middleware
+const verifyRole = (roles) => {
+  return (req, res, next) => {
+    if (!req.userId) return res.sendStatus(403);
+
+    usersCollection.findOne({ _id: new ObjectId(req.userId) })
+      .then(user => {
+        if (!user || !roles.includes(user.role)) {
+          return res.sendStatus(403);
+        }
+        next();
+      })
+      .catch(err => {
+        console.error("Role verification error:", err);
+        res.sendStatus(403);
+      });
+  };
+};
+
+
 // Select a course
 app.post("/courses/select", verifyJWT, async (req, res) => {
   const { courseId } = req.body;
   
   // Check if the course exists
   const course = await coursesCollection.findOne({ _id: new ObjectId(courseId) });
-  if (!course) {
-    return res.status(404).json({ message: "Course not found" });
+  // if (!course) {
+  //   return res.status(404).json({ message: "Course not found" });
+  // }
+  
+   // Check if the course is already selected by the user
+  const user = await usersCollection.findOne({ _id: new ObjectId(req.userId) });
+  
+  if (user?.selectedCourses?.includes(courseId)) {
+    return res.status(400).json({ message: "Course already selected" });
   }
 
   // Add the course to the user's selected courses
@@ -88,8 +109,8 @@ app.get("/courses/selected", verifyJWT, async (req, res) => {
 });
 
 // Delete a selected course
-app.delete("/courses/remove", verifyJWT, async (req, res) => {
-  const { courseId } = req.body;
+app.delete("/courses/remove/:id", verifyJWT, async (req, res) => {
+  const courseId = req.params.id;
 
   // Remove the course from the user's selected courses
   const result = await usersCollection.updateOne(
