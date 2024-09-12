@@ -76,7 +76,7 @@ app.post("/courses/select", verifyJWT, async (req, res) => {
   // if (!course) {
   //   return res.status(404).json({ message: "Course not found" });
   // }
-  
+
    // Check if the course is already selected by the user
   const user = await usersCollection.findOne({ _id: new ObjectId(req.userId) });
   
@@ -205,11 +205,32 @@ app.delete("/courses/remove/:id", verifyJWT, async (req, res) => {
       res.send(courses);
     });
 
-    app.post("/courses", async (req, res) => {
-      const course = req.body;
-      const result = await coursesCollection.insertOne(course);
-      res.send(result);
-    });
+   // Add a new course (Instructor)
+app.post("/courses", verifyJWT, verifyRole(["instructor"]), async (req, res) => {
+  const course = req.body;
+  course.status = "pending";  
+  course.feedback = "";
+  course.instructorId = req.userId;  
+
+  const result = await coursesCollection.insertOne(course);
+  res.status(201).json({ message: "Course added successfully", result });
+});
+
+// Get courses by instructor (Instructor's My Classes)
+app.get("/instructor/courses", verifyJWT, verifyRole(["instructor"]), async (req, res) => {
+  const courses = await coursesCollection.find({ instructorId: req.userId }).toArray();
+  res.status(200).json(courses);
+});
+
+app.patch("/admin/courses/:id", verifyJWT, verifyRole(["admin"]), async (req, res) => {
+  const { status, feedback } = req.body;  
+  const result = await coursesCollection.updateOne(
+    { _id: new ObjectId(req.params.id) },
+    { $set: { status, feedback } }
+  );
+
+  res.status(200).json({ message: `Course ${status} successfully`, result });
+});
 
     //teachers
 
