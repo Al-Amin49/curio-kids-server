@@ -204,6 +204,19 @@ app.delete("/courses/remove/:id", verifyJWT, async (req, res) => {
       const courses = await cursor.toArray();
       res.send(courses);
     });
+    //approved courses
+    app.get("/courses/approved", async (req, res) => {
+      try {
+        // Fetch only courses with status 'approved'
+        const approvedCourses = await coursesCollection.find({ status: "approved" }).toArray();
+    
+        // Send the approved courses as a response
+        res.status(200).json(approvedCourses);
+      } catch (error) {
+        console.error("Error fetching approved courses:", error);
+        res.status(500).json({ message: "Failed to fetch approved courses" });
+      }
+    });
 
    // Add a new course (Instructor)
 app.post("/courses", verifyJWT, verifyRole(["instructor"]), async (req, res) => {
