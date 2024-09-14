@@ -221,7 +221,36 @@ app.get("/instructor/courses", verifyJWT, verifyRole(["instructor"]), async (req
   const courses = await coursesCollection.find({ instructorId: req.userId }).toArray();
   res.status(200).json(courses);
 });
+// Delete a course by ID (Instructor's My Classes)
+app.delete("/courses/:id", verifyJWT, verifyRole(["instructor"]), async (req, res) => {
+  const courseId = req.params.id;
+  const instructorId = req.userId;
 
+  try {
+    // Find the course by ID
+    const course = await coursesCollection.findOne({ _id: courseId });
+
+    // Check if the course exists and if it belongs to the instructor
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    if (course.instructorId !== instructorId) {
+      return res.status(403).json({ message: "You are not authorized to delete this course" });
+    }
+
+    // Delete the course
+    await coursesCollection.deleteOne({ _id: courseId });
+
+    res.status(200).json({ message: "Course deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting course:", error);
+    res.status(500).json({ message: "Failed to delete course" });
+  }
+});
+
+
+//admin update course status
 app.patch("/admin/courses/:id", verifyJWT, verifyRole(["admin"]), async (req, res) => {
   const { status, feedback } = req.body;  
   const result = await coursesCollection.updateOne(
@@ -231,6 +260,36 @@ app.patch("/admin/courses/:id", verifyJWT, verifyRole(["admin"]), async (req, re
 
   res.status(200).json({ message: `Course ${status} successfully`, result });
 });
+
+// admin update  Promote user to instructor or admin (Admin only)
+app.patch("/admin/users/role/:id", verifyJWT, verifyRole(["admin"]), async (req, res) => {
+  const userId = req.params.id;
+  const { role } = req.body;
+
+  // Validate role input
+  if (!["instructor", "admin"].includes(role)) {
+    return res.status(400).json({ message: "Invalid role. Choose 'instructor' or 'admin'." });
+  }
+
+  try {
+    // Find and update the user's role
+    const result = await usersCollection.updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { role } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({ message: `User role updated to ${role} successfully`, result });
+  } catch (error) {
+    console.error("Error updating user role:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+
 
     //teachers
 
