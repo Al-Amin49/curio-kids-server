@@ -198,6 +198,13 @@ app.delete("/courses/remove/:id", verifyJWT, async (req, res) => {
   });
     });
 
+    //get AllUsers
+    app.get("/allusers",verifyJWT, verifyRole(['admin']), async (req, res) => {
+      const cursor = usersCollection.find();
+      const allusers = await cursor.toArray();
+      res.send(allusers);
+    });
+
     // Courses
     app.get("/courses", async (req, res) => {
       const cursor = coursesCollection.find();
