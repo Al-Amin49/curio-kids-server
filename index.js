@@ -1,6 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const app = express();
 require("dotenv").config();
 const cors = require("cors");
@@ -26,6 +27,7 @@ async function run() {
     const coursesCollection = client.db("curiokids").collection("courses");
     const teachersCollection = client.db("curiokids").collection("teachers");
     const usersCollection = client.db("curiokids").collection("users");
+    const paymentsCollection = client.db("curiokids").collection("payments");
 
     // Verify JWT (middleware)
     const verifyJWT = (req, res, next) => {
@@ -207,7 +209,7 @@ app.delete("/courses/remove/:id", verifyJWT, async (req, res) => {
 
     // Courses
     app.get("/courses", async (req, res) => {
-      const cursor = coursesCollection.find();
+      const cursor = coursesCollection.find().sort({ createdAt: -1 });
       const courses = await cursor.toArray();
       res.send(courses);
     });
@@ -400,12 +402,23 @@ app.patch("/admin/users/role/:id", verifyJWT, verifyRole(["admin"]), async (req,
       }
     })
 
-    app.post("/teachers", async (req, res) => {
-      const teacher = req.body;
-      const result = await teachersCollection.insertOne(teacher);
-      res.send(result);
-    });
-
+      // payment intent
+      app.post('/create-payment-intent', async (req, res) => {
+        const { price } = req.body;
+        const amount = parseInt(price * 100);
+        // console.log(amount, 'amount inside the intent')
+  
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount,
+          currency: 'usd',
+          payment_method_types: ['card']
+        });
+  
+        res.send({
+          clientSecret: paymentIntent.client_secret
+        })
+      });
+  
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
