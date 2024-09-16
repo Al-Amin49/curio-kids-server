@@ -226,21 +226,66 @@ app.delete("/courses/remove/:id", verifyJWT, async (req, res) => {
     });
 
    // Add a new course (Instructor)
-app.post("/courses", verifyJWT, verifyRole(["instructor"]), async (req, res) => {
-  const course = req.body;
-  course.status = "pending";  
-  course.feedback = "";
-  course.instructorId = req.userId;  
+// app.post("/courses", verifyJWT, verifyRole(["instructor"]), async (req, res) => {
+//   const course = req.body;
+//   course.status = "pending";  
+//   course.feedback = "";
+//   course.instructorId = req.userId;  
 
-  const result = await coursesCollection.insertOne(course);
-  res.status(201).json({ message: "Course added successfully", result });
+//   const result = await coursesCollection.insertOne(course);
+//   res.status(201).json({ message: "Course added successfully", result });
+// });
+
+app.post("/courses", verifyJWT, verifyRole(["instructor"]), async (req, res) => {
+  const { title, description, age, time, seat, price, img, video } = req.body;  
+  const instructorId = req.userId;
+
+  // Prepare the new course object
+  const course = {
+    title,
+    description,
+    age,
+    time,
+    seat,
+    price,
+    img,
+    video,
+    status: "pending", // Default status
+    feedback: null,    // Initial feedback is null
+    instructorId,      // The instructor's ID from JWT
+  };
+
+  try {
+    // Insert the new course into the collection
+    const result = await coursesCollection.insertOne(course);
+
+    // After successfully adding the course, update the instructor's class info
+    const updateInstructor = await usersCollection.updateOne(
+      { _id: new ObjectId(instructorId) },
+      {
+        $inc: { numberOfClasses: 1 },            // Increment the class count
+        $addToSet: { classesTaught: title }      // Add the class name to the instructor's list
+      }
+    );
+
+    res.status(201).json({
+      message: "Course added and instructor updated successfully",
+      courseResult: result,
+      instructorUpdate: updateInstructor,
+    });
+  } catch (error) {
+    console.error("Error adding course or updating instructor:", error);
+    res.status(500).json({ message: "Failed to add course or update instructor" });
+  }
 });
+
 
 // Get courses by instructor (Instructor's My Classes)
 app.get("/instructor/courses", verifyJWT, verifyRole(["instructor"]), async (req, res) => {
   const courses = await coursesCollection.find({ instructorId: req.userId }).toArray();
   res.status(200).json(courses);
 });
+
 // Delete a course by ID (Instructor's My Classes)
 app.delete("/courses/:id", verifyJWT, verifyRole(["instructor"]), async (req, res) => {
   const courseId = req.params.id;
@@ -270,6 +315,7 @@ app.delete("/courses/:id", verifyJWT, verifyRole(["instructor"]), async (req, re
 });
 
 
+
 //admin update course status
 app.patch("/admin/courses/:id", verifyJWT, verifyRole(["admin"]), async (req, res) => {
   const { status, feedback } = req.body;  
@@ -281,10 +327,10 @@ app.patch("/admin/courses/:id", verifyJWT, verifyRole(["admin"]), async (req, re
   res.status(200).json({ message: `Course ${status} successfully`, result });
 });
 
-// admin update  Promote user to instructor or admin (Admin only)
+// When promoting a user to instructor, add designation and socialLinks
 app.patch("/admin/users/role/:id", verifyJWT, verifyRole(["admin"]), async (req, res) => {
   const userId = req.params.id;
-  const { role } = req.body;
+  const { role, designation, socialLinks } = req.body; // Extend to accept designation and socialLinks
 
   // Validate role input
   if (!["instructor", "admin"].includes(role)) {
@@ -295,7 +341,12 @@ app.patch("/admin/users/role/:id", verifyJWT, verifyRole(["admin"]), async (req,
     // Find and update the user's role
     const result = await usersCollection.updateOne(
       { _id: new ObjectId(userId) },
-      { $set: { role } }
+      {
+        $set: {
+          role,
+          ...(role === 'instructor' && { designation, socialLinks }), // Only add if user is promoted to instructor
+        },
+      }
     );
 
     if (result.matchedCount === 0) {
@@ -311,6 +362,7 @@ app.patch("/admin/users/role/:id", verifyJWT, verifyRole(["admin"]), async (req,
 
 
 
+
     //teachers
 
     app.get("/teachers", async (req, res) => {
@@ -318,6 +370,35 @@ app.patch("/admin/users/role/:id", verifyJWT, verifyRole(["admin"]), async (req,
       const teachers = await cursor.toArray();
       res.send(teachers);
     });
+    app.get('/instructors', async (req, res) => {
+      try {
+        // Fetch all instructors
+        const instructors = await usersCollection.find({ role: "instructor" }).toArray();
+    
+        // For each instructor, fetch their classes and calculate the number of classes
+        const instructorsWithClasses = await Promise.all(instructors.map(async (instructor) => {
+          // Fetch the classes for this instructor
+          const classes = await coursesCollection.find({
+             instructorId: instructor._id,
+             status:'approved'
+             }).toArray();
+    
+          // Extract class names
+          const name_of_classes = classes.map(course => course.className);
+          
+          return {
+            ...instructor,
+            number_of_classes: classes.length,
+            name_of_classes,
+          };
+        }));
+    
+        res.status(200).json(instructorsWithClasses);
+      } catch (error) {
+        console.error("Error fetching instructors with classes:", error);
+        res.status(500).json({ message: "Failed to fetch instructors with classes" });
+      }
+    })
 
     app.post("/teachers", async (req, res) => {
       const teacher = req.body;
